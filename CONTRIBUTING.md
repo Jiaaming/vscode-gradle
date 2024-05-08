@@ -38,6 +38,8 @@ The extension uses a Gradle plugin (`com.microsoft.gradle.GradlePlugin`) to get 
 1. Run vscode launch configuration `Debug Extension & Gradle Plugin`.
 2. Run vscode launch configuration `Attach to Gradle Plugin`.
 
+> Note: There is a known issue that when the Gradle project stores in a sub-folder of the root folder, the `Attach to Gradle Plugin` will fail to attach. See [#1237](https://github.com/microsoft/vscode-gradle/issues/1237).
+
 ## Debugging Gradle Build Server
 
 To debug the Extension with the [Gradle Build Server](https://github.com/microsoft/build-server-for-gradle), follow these steps:
@@ -63,7 +65,6 @@ To debug the Extension with the [Gradle Build Server](https://github.com/microso
 
 
 
-> Note: There is a known issue that when the Gradle project stores in a sub-folder of the root folder, the `Attach to Gradle Plugin` will fail to attach. See [#1237](https://github.com/microsoft/vscode-gradle/issues/1237).
 
 ## Debugging Gradle Language Server (editing feature related)
 

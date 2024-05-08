@@ -86,9 +86,8 @@ public class ImporterPlugin extends Plugin {
 
         String pluginPath = getBuildServerPluginPath();
 
-        List<String> command = new ArrayList<>();
-        // Check for the DEBUG_VSCODE_SERVER environment variable
         String debugServer = System.getenv("DEBUG_VSCODE_BUILD_SERVER");
+        List<String> command = new ArrayList<>();
 
         command.add(javaExecutablePath);
         if ("true".equals(debugServer)) {

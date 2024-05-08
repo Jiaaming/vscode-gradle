@@ -18,7 +18,7 @@
         "order": 1
       },
       "env": {
-        "DEBUG_VSCODE_JAVA":"true"
+        "DEBUG_VSCODE_JAVA":"true",
       },
     },
     {
@@ -74,12 +74,33 @@
       ],
       "preLaunchTask": "Gradle: Build",
       "env": {
-        "VSCODE_DEBUG_PLUGIN": "true"
+        "VSCODE_DEBUG_PLUGIN": "true",
       },
       "presentation": {
         "group": "debug",
         "order": 2
       }
+    },
+    {
+      "name": "Debug Extension & Build Server",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/extension"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/extension/dist/**/*.js"
+      ],
+      "preLaunchTask": "Gradle: Build",
+      "presentation": {
+        "group": "debug",
+        "order": 3
+      },
+      "env": {
+        "DEBUG_VSCODE_JAVA":"true",
+        "DEBUG_VSCODE_BUILD_SERVER":"true"
+      },
     },
     {
       "name": "Debug Language Server: Launch Extension",

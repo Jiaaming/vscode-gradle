@@ -98,7 +98,6 @@
         "order": 3
       },
       "env": {
-        "DEBUG_VSCODE_JAVA":"true",
         "DEBUG_VSCODE_BUILD_SERVER":"true"
       },
     },

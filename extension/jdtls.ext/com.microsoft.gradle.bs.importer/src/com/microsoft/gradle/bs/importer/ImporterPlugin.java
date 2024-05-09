@@ -86,11 +86,11 @@ public class ImporterPlugin extends Plugin {
 
         String pluginPath = getBuildServerPluginPath();
 
-        String debugServer = System.getenv("DEBUG_VSCODE_BUILD_SERVER");
+
         List<String> command = new ArrayList<>();
 
         command.add(javaExecutablePath);
-        if ("true".equals(debugServer)) {
+        if (Boolean.parseBoolean(System.getenv("DEBUG_GRADLE_BUILD_SERVER"))) {
             command.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8989");
         }
         command.add("--add-opens=java.base/java.lang=ALL-UNNAMED");

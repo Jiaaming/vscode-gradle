@@ -98,7 +98,7 @@
         "order": 3
       },
       "env": {
-        "DEBUG_VSCODE_BUILD_SERVER":"true"
+        "DEBUG_GRADLE_BUILD_SERVER":"true"
       },
     },
     {

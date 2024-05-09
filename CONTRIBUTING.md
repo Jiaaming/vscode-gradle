@@ -46,7 +46,6 @@ To debug the Extension with the [Gradle Build Server](https://github.com/microso
 
 1. Open the `extension/build-server-for-gradle` directory, which you should have [imported previously](#build-gradle-project-importer) as a separate project.
 2. In the `.vscode/launch.json` of the build-server-for-gradle project, ensure you have the following configuration to attach the debugger:
-
    ```json
    {
      "type": "java",
@@ -57,7 +56,6 @@ To debug the Extension with the [Gradle Build Server](https://github.com/microso
      "projectName": "server"
    }
    ```
-
 3. In your main project (vscode-gradle), start the `Debug Extension & Build Server` launch configuration.
 4. In the build-server-for-gradle project, start the `Attach to Gradle Build Server` launch configuration.
 

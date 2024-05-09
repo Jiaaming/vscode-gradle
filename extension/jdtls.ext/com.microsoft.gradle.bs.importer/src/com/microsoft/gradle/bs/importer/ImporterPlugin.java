@@ -86,7 +86,6 @@ public class ImporterPlugin extends Plugin {
 
         String pluginPath = getBuildServerPluginPath();
 
-
         List<String> command = new ArrayList<>();
 
         command.add(javaExecutablePath);
@@ -100,7 +99,6 @@ public class ImporterPlugin extends Plugin {
         command.add("-cp");
         command.add(String.join(getClasspathSeparator(), classpaths));
         command.add("com.microsoft.java.bs.core.Launcher");
-
 
         ProcessBuilder build = new ProcessBuilder(command);
 

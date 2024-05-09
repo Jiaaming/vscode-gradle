@@ -87,7 +87,6 @@ public class ImporterPlugin extends Plugin {
         String pluginPath = getBuildServerPluginPath();
 
         List<String> command = new ArrayList<>();
-
         command.add(javaExecutablePath);
         if (Boolean.parseBoolean(System.getenv("DEBUG_GRADLE_BUILD_SERVER"))) {
             command.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8989");
@@ -101,7 +100,6 @@ public class ImporterPlugin extends Plugin {
         command.add("com.microsoft.java.bs.core.Launcher");
 
         ProcessBuilder build = new ProcessBuilder(command);
-
         try {
             Process process = build.start();
             BuildClient client = new GradleBuildClient();

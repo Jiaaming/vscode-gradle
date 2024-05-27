@@ -1,14 +1,16 @@
 import * as vscode from "vscode";
 import * as grpc from "@grpc/grpc-js";
 import { connectivityState as ConnectivityState } from "@grpc/grpc-js";
+import * as rpc from 'vscode-jsonrpc/node';
+import * as net from 'net';
 
 import {
     Output,
-    GetBuildRequest,
-    GetBuildReply,
+    // GetBuildReply,
+    // GetBuildRequest,
     Cancelled,
     GradleBuild,
-    Environment,
+    // Environment,
     GradleConfig,
     GetDaemonsStatusReply,
     GetDaemonsStatusRequest,
@@ -26,8 +28,14 @@ import {
     ExecuteCommandReply,
 } from "../proto/gradle_pb";
 
+//import { GetBuildParams } from "../bsp/GetBuildParams";
+//import { GetBuildResult } from "../bsp/GetBuildResult";
 import { GradleClient as GrpcClient } from "../proto/gradle_grpc_pb";
-import { logger, LoggerStream, LogVerbosity, Logger } from "../logger";
+import {
+    logger,
+    // LoggerStream,
+    // LogVerbosity,
+    Logger } from "../logger";
 import { GradleServer } from "../server";
 import { ProgressHandler } from "../progress";
 import { removeCancellingTask, restartQueuedTask } from "../tasks/taskUtil";
@@ -36,21 +44,22 @@ import { RootProject } from "../rootProject/RootProject";
 import { getBuildCancellationKey } from "./CancellationKeys";
 import { EventWaiter } from "../util/EventWaiter";
 import { getGradleConfig, getJavaDebugCleanOutput } from "../util/config";
-import { setDefault, unsetDefault } from "../views/defaultProject/DefaultProjectUtils";
+//import { setDefault, unsetDefault } from "../views/defaultProject/DefaultProjectUtils";
 import { SpecifySourcePackageNameStep } from "../createProject/SpecifySourcePackageNameStep";
 
-function logBuildEnvironment(environment: Environment): void {
-    const javaEnv = environment.getJavaEnvironment()!;
-    const gradleEnv = environment.getGradleEnvironment()!;
-    logger.info("Java Home:", javaEnv.getJavaHome());
-    logger.info("JVM Args:", javaEnv.getJvmArgsList().join(","));
-    logger.info("Gradle User Home:", gradleEnv.getGradleUserHome());
-    logger.info("Gradle Version:", gradleEnv.getGradleVersion());
-}
+// function logBuildEnvironment(environment: Environment): void {
+//     const javaEnv = environment.getJavaEnvironment()!;
+//     const gradleEnv = environment.getGradleEnvironment()!;
+//     logger.info("Java Home:", javaEnv.getJavaHome());
+//     logger.info("JVM Args:", javaEnv.getJvmArgsList().join(","));
+//     logger.info("Gradle User Home:", gradleEnv.getGradleUserHome());
+//     logger.info("Gradle Version:", gradleEnv.getGradleVersion());
+// }
 
 export class GradleClient implements vscode.Disposable {
     private readonly connectDeadline = 30; // seconds
     private grpcClient: GrpcClient | null = null;
+    private rpcConnection: rpc.MessageConnection | null = null;
     private readonly _onDidConnect: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     private readonly _onDidConnectFail: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     public readonly onDidConnect: vscode.Event<null> = this._onDidConnect.event;
@@ -63,12 +72,37 @@ export class GradleClient implements vscode.Disposable {
         private readonly statusBarItem: vscode.StatusBarItem,
         private readonly clientLogger: Logger
     ) {
-        this.server.onDidStart(this.handleServerStart);
+        //this.server.onDidStart(this.handleServerStart);
+        this.server.onDidStart(this.handleRpcServerStart);
         this.server.onDidStop(this.handleServerStop);
     }
 
     private handleServerStop = (): void => {
         this.close();
+    };
+
+    public handleRpcServerStart = (): Thenable<void> => {
+        return vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Window,
+                title: "Gradle",
+                cancellable: false,
+            },
+            (progress: vscode.Progress<{ message?: string }>) => {
+                progress.report({ message: "Connecting" });
+                return new Promise((resolve) => {
+                    const disposableConnectHandler = this.onDidConnect(() => {
+                        disposableConnectHandler.dispose();
+                        resolve();
+                    });
+                    const disposableConnectFailHandler = this.onDidConnectFail(() => {
+                        disposableConnectFailHandler.dispose();
+                        resolve();
+                    });
+                    this.connectToRpcServer();
+                });
+            }
+        );
     };
 
     public handleServerStart = (): Thenable<void> => {
@@ -120,6 +154,138 @@ export class GradleClient implements vscode.Disposable {
         }
     }
 
+    private connectToRpcServer(): void {
+        try {
+            const socket = net.connect(this.server.getPort()!, 'localhost', () => {
+                this.rpcConnection = rpc.createMessageConnection(
+                    new rpc.StreamMessageReader(socket),
+                    new rpc.StreamMessageWriter(socket)
+                );
+
+                this.rpcConnection.onClose(() => {
+                    this._onDidConnectFail.fire(null);
+                });
+
+                this.rpcConnection.listen();
+                logger.info("Connected to the server at");
+                const port = this.server.getPort()!;
+                logger.info(port.toString()!);
+                this._onDidConnect.fire(null);
+            });
+
+            socket.on('error', (err) => {
+                logger.error("Unable to connect to the server:", err.message);
+                this.statusBarItem.hide();
+                this._onDidConnectFail.fire(null);
+            });
+        } catch (err) {
+            logger.error("Unable to construct the JSON-RPC client:", err.message);
+            this.statusBarItem.hide();
+        }
+    }
+
+    // public async getBuild(
+    //     rootProject: RootProject,
+    //     gradleConfig: GradleConfig,
+    //     showOutputColors = false
+    // ): Promise<GradleBuild | undefined> {
+    //     await this.waitForConnect();
+    //     this.statusBarItem.hide();
+    //     return vscode.window.withProgress(
+    //         {
+    //             location: vscode.ProgressLocation.Window,
+    //             title: "Gradle",
+    //             cancellable: true,
+    //         },
+    //         async (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => {
+    //             const progressHandler = new ProgressHandler(progress, "Configure project");
+    //             const cancellationKey = getBuildCancellationKey(rootProject.getProjectUri().fsPath);
+
+    //             token.onCancellationRequested(() => this.cancelBuild(cancellationKey));
+
+    //             const stdOutLoggerStream = new LoggerStream(logger, LogVerbosity.INFO);
+    //             const stdErrLoggerStream = new LoggerStream(logger, LogVerbosity.ERROR);
+
+    //             const request = new GetBuildRequest();
+    //             request.setProjectDir(rootProject.getProjectUri().fsPath);
+    //             request.setCancellationKey(cancellationKey);
+    //             request.setGradleConfig(gradleConfig);
+    //             request.setShowOutputColors(showOutputColors);
+    //             const getBuildStream = this.grpcClient!.getBuild(request);
+    //             try {
+    //                 return await new Promise((resolve, reject) => {
+    //                     let build: GradleBuild | undefined;
+    //                     getBuildStream
+    //                         .on("data", async (getBuildReply: GetBuildReply) => {
+    //                             switch (getBuildReply.getKindCase()) {
+    //                                 case GetBuildReply.KindCase.PROGRESS:
+    //                                     progressHandler.report(getBuildReply.getProgress()!.getMessage().trim());
+    //                                     break;
+    //                                 case GetBuildReply.KindCase.OUTPUT:
+    //                                     switch (getBuildReply.getOutput()!.getOutputType()) {
+    //                                         case Output.OutputType.STDOUT:
+    //                                             stdOutLoggerStream.write(
+    //                                                 getBuildReply.getOutput()!.getOutputBytes_asU8()
+    //                                             );
+    //                                             break;
+    //                                         case Output.OutputType.STDERR:
+    //                                             stdErrLoggerStream.write(
+    //                                                 getBuildReply.getOutput()!.getOutputBytes_asU8()
+    //                                             );
+    //                                             break;
+    //                                     }
+    //                                     break;
+    //                                 case GetBuildReply.KindCase.CANCELLED:
+    //                                     this.handleGetBuildCancelled(getBuildReply.getCancelled()!);
+    //                                     break;
+    //                                 case GetBuildReply.KindCase.GET_BUILD_RESULT:
+    //                                     void unsetDefault();
+    //                                     build = getBuildReply.getGetBuildResult()!.getBuild();
+    //                                     break;
+    //                                 case GetBuildReply.KindCase.ENVIRONMENT:
+    //                                     const environment = getBuildReply.getEnvironment()!;
+    //                                     rootProject.setEnvironment(environment);
+    //                                     logBuildEnvironment(environment);
+    //                                     await vscode.commands.executeCommand(COMMAND_REFRESH_DAEMON_STATUS);
+    //                                     break;
+    //                                 case GetBuildReply.KindCase.COMPATIBILITY_CHECK_ERROR:
+    //                                     const message = getBuildReply.getCompatibilityCheckError()!;
+    //                                     const options = ["Open Gradle Settings", "Learn More"];
+    //                                     await vscode.window.showErrorMessage(message, ...options).then((choice) => {
+    //                                         if (choice === "Open Gradle Settings") {
+    //                                             void vscode.commands.executeCommand(
+    //                                                 "workbench.action.openSettings",
+    //                                                 "java.import.gradle"
+    //                                             );
+    //                                         } else if (choice === "Learn More") {
+    //                                             void vscode.env.openExternal(
+    //                                                 vscode.Uri.parse(
+    //                                                     "https://docs.gradle.org/current/userguide/compatibility.html"
+    //                                                 )
+    //                                             );
+    //                                         }
+    //                                     });
+    //                                     break;
+    //                             }
+    //                         })
+    //                         .on("error", reject)
+    //                         .on("end", () => resolve(build));
+    //                 });
+    //             } catch (err) {
+    //                 void setDefault();
+    //                 logger.error(
+    //                     `Error getting build for ${rootProject.getProjectUri().fsPath}: ${err.details || err.message}`
+    //                 );
+    //                 this.statusBarItem.command = COMMAND_SHOW_LOGS;
+    //                 this.statusBarItem.text = "$(warning) Gradle: Build Error";
+    //                 this.statusBarItem.show();
+    //             } finally {
+    //                 process.nextTick(() => vscode.commands.executeCommand(COMMAND_REFRESH_DAEMON_STATUS));
+    //             }
+    //             return undefined;
+    //         }
+    //     );
+    // }
     public async getBuild(
         rootProject: RootProject,
         gradleConfig: GradleConfig,
@@ -136,89 +302,36 @@ export class GradleClient implements vscode.Disposable {
             async (progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => {
                 const progressHandler = new ProgressHandler(progress, "Configure project");
                 const cancellationKey = getBuildCancellationKey(rootProject.getProjectUri().fsPath);
-
+                console.log("progressHandler", progressHandler);
                 token.onCancellationRequested(() => this.cancelBuild(cancellationKey));
 
-                const stdOutLoggerStream = new LoggerStream(logger, LogVerbosity.INFO);
-                const stdErrLoggerStream = new LoggerStream(logger, LogVerbosity.ERROR);
+                const request = {
+                    projectDir: rootProject.getProjectUri().fsPath,
+                    cancellationKey: cancellationKey,
+                    gradleConfig: gradleConfig,
+                    showOutputColors: showOutputColors
+                };
 
-                const request = new GetBuildRequest();
-                request.setProjectDir(rootProject.getProjectUri().fsPath);
-                request.setCancellationKey(cancellationKey);
-                request.setGradleConfig(gradleConfig);
-                request.setShowOutputColors(showOutputColors);
-                const getBuildStream = this.grpcClient!.getBuild(request);
                 try {
-                    return await new Promise((resolve, reject) => {
-                        let build: GradleBuild | undefined;
-                        getBuildStream
-                            .on("data", async (getBuildReply: GetBuildReply) => {
-                                switch (getBuildReply.getKindCase()) {
-                                    case GetBuildReply.KindCase.PROGRESS:
-                                        progressHandler.report(getBuildReply.getProgress()!.getMessage().trim());
-                                        break;
-                                    case GetBuildReply.KindCase.OUTPUT:
-                                        switch (getBuildReply.getOutput()!.getOutputType()) {
-                                            case Output.OutputType.STDOUT:
-                                                stdOutLoggerStream.write(
-                                                    getBuildReply.getOutput()!.getOutputBytes_asU8()
-                                                );
-                                                break;
-                                            case Output.OutputType.STDERR:
-                                                stdErrLoggerStream.write(
-                                                    getBuildReply.getOutput()!.getOutputBytes_asU8()
-                                                );
-                                                break;
-                                        }
-                                        break;
-                                    case GetBuildReply.KindCase.CANCELLED:
-                                        this.handleGetBuildCancelled(getBuildReply.getCancelled()!);
-                                        break;
-                                    case GetBuildReply.KindCase.GET_BUILD_RESULT:
-                                        void unsetDefault();
-                                        build = getBuildReply.getGetBuildResult()!.getBuild();
-                                        break;
-                                    case GetBuildReply.KindCase.ENVIRONMENT:
-                                        const environment = getBuildReply.getEnvironment()!;
-                                        rootProject.setEnvironment(environment);
-                                        logBuildEnvironment(environment);
-                                        await vscode.commands.executeCommand(COMMAND_REFRESH_DAEMON_STATUS);
-                                        break;
-                                    case GetBuildReply.KindCase.COMPATIBILITY_CHECK_ERROR:
-                                        const message = getBuildReply.getCompatibilityCheckError()!;
-                                        const options = ["Open Gradle Settings", "Learn More"];
-                                        await vscode.window.showErrorMessage(message, ...options).then((choice) => {
-                                            if (choice === "Open Gradle Settings") {
-                                                void vscode.commands.executeCommand(
-                                                    "workbench.action.openSettings",
-                                                    "java.import.gradle"
-                                                );
-                                            } else if (choice === "Learn More") {
-                                                void vscode.env.openExternal(
-                                                    vscode.Uri.parse(
-                                                        "https://docs.gradle.org/current/userguide/compatibility.html"
-                                                    )
-                                                );
-                                            }
-                                        });
-                                        break;
-                                }
-                            })
-                            .on("error", reject)
-                            .on("end", () => resolve(build));
+                    return await new Promise<GradleBuild | undefined>((resolve, reject) => {
+                        this.rpcConnection?.sendRequest<GradleBuild>('task/getBuild', request).then(response => {
+                            const res = resolve(response);
+                            console.log("res", res);
+                            logger.info("Completed build");
+                        }).catch(error => {
+                            logger.error("Error getting build:", error.message);
+                            reject(error);
+                        });
                     });
                 } catch (err) {
-                    void setDefault();
-                    logger.error(
-                        `Error getting build for ${rootProject.getProjectUri().fsPath}: ${err.details || err.message}`
-                    );
+                    logger.error(`Error getting build for ${rootProject.getProjectUri().fsPath}: ${err.message}`);
                     this.statusBarItem.command = COMMAND_SHOW_LOGS;
                     this.statusBarItem.text = "$(warning) Gradle: Build Error";
                     this.statusBarItem.show();
+                    throw err;
                 } finally {
                     process.nextTick(() => vscode.commands.executeCommand(COMMAND_REFRESH_DAEMON_STATUS));
                 }
-                return undefined;
             }
         );
     }
@@ -470,9 +583,9 @@ export class GradleClient implements vscode.Disposable {
         }
     };
 
-    private handleGetBuildCancelled = (cancelled: Cancelled): void => {
-        logger.info("Build cancelled:", cancelled.getMessage());
-    };
+    // private handleGetBuildCancelled = (cancelled: Cancelled): void => {
+    //     logger.info("Build cancelled:", cancelled.getMessage());
+    // };
 
     private handleConnectError = async (e: Error): Promise<void> => {
         logger.error("Error connecting to gradle server:", e.message);

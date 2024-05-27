@@ -10,7 +10,8 @@ import { NO_JAVA_EXECUTABLE } from "../constant";
 
 const SERVER_LOGLEVEL_REGEX = /^\[([A-Z]+)\](.*)$/;
 const DOWNLOAD_PROGRESS_CHAR = ".";
-
+const DEBUG_MERGE = true;
+const JAVA_EXECUTABLE = "java";
 export interface ServerOptions {
     host: string;
 }
@@ -33,7 +34,11 @@ export class GradleServer {
     ) {}
 
     public async start(): Promise<void> {
-        if (isDebuggingServer()) {
+        if (DEBUG_MERGE) {
+            this.port = 8887;
+            this.fireOnStart();
+
+        } else if (isDebuggingServer()) {
             this.port = 8887;
             this.fireOnStart();
         } else {

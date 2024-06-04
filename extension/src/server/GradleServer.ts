@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as cp from "child_process";
-import * as getPort from "get-port";
+//import * as getPort from "get-port";
 import * as kill from "tree-kill";
 import { getGradleServerCommand, getGradleServerEnv } from "./serverUtil";
 import { isDebuggingServer } from "../util";
@@ -19,7 +19,8 @@ export class GradleServer {
     private readonly _onDidStart: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     private readonly _onDidStop: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     private ready = false;
-    private port: number | undefined;
+    private gradleServerPort: number | undefined;
+    private buildServerPort: number | undefined;
     private restarting = false;
 
     public readonly onDidStart: vscode.Event<null> = this._onDidStart.event;
@@ -34,10 +35,12 @@ export class GradleServer {
 
     public async start(): Promise<void> {
         if (isDebuggingServer()) {
-            this.port = 8887;
+            this.gradleServerPort = 8887;
             this.fireOnStart();
         } else {
-            this.port = await getPort();
+            this.gradleServerPort = 8887;
+            //this.buildServerPort = await getPort();
+            this.buildServerPort = 8817;
             const cwd = this.context.asAbsolutePath("lib");
             const cmd = path.join(cwd, getGradleServerCommand());
             const env = await getGradleServerEnv();
@@ -45,7 +48,7 @@ export class GradleServer {
                 await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE);
                 return;
             }
-            const args = [String(this.port)];
+            const args = [String(this.gradleServerPort), String(this.buildServerPort)];
 
             this.logger.debug("Starting server");
             this.logger.debug(`Gradle Server cmd: ${cmd} ${args.join(" ")}`);
@@ -141,7 +144,7 @@ export class GradleServer {
     }
 
     public getPort(): number | undefined {
-        return this.port;
+        return this.gradleServerPort;
     }
 
     public getOpts(): ServerOptions {

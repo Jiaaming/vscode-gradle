@@ -7,9 +7,11 @@ import { getGradleServerCommand, getGradleServerEnv } from "./serverUtil";
 import { isDebuggingServer } from "../util";
 import { Logger } from "../logger/index";
 import { NO_JAVA_EXECUTABLE } from "../constant";
-
+//import { generateRandomPipeName } from 'vscode-languageclient/node';
+import { getRedHatJavaExecutablePath } from "../util/config";
 const SERVER_LOGLEVEL_REGEX = /^\[([A-Z]+)\](.*)$/;
 const DOWNLOAD_PROGRESS_CHAR = ".";
+//export const GET_BUILD_SERVER_PORT = "gradle.getBuildServerPort";
 
 export interface ServerOptions {
     host: string;
@@ -20,7 +22,7 @@ export class GradleServer {
     private readonly _onDidStop: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     private ready = false;
     private gradleServerPort: number | undefined;
-    private buildServerPort: number | undefined;
+    private buildServerPipeName: string | undefined;
     private restarting = false;
 
     public readonly onDidStart: vscode.Event<null> = this._onDidStart.event;
@@ -30,29 +32,43 @@ export class GradleServer {
     constructor(
         private readonly opts: ServerOptions,
         private readonly context: vscode.ExtensionContext,
-        private readonly logger: Logger
+        private readonly logger: Logger,
     ) {}
-
+    // private async registerGetBuildServerPipeNameCommand(): Promise<void> {
+    //     this.context.subscriptions.push(
+    //         vscode.commands.registerCommand(GET_BUILD_SERVER_PORT, async (testNum: number) => {
+    //             const res = [testNum];
+    //             return await Promise.resolve(res);
+    //         })
+    //     );
+    // }
     public async start(): Promise<void> {
         if (isDebuggingServer()) {
-            this.gradleServerPort = 8887;
             this.fireOnStart();
         } else {
-            this.gradleServerPort = 8887;
-            //this.buildServerPort = await getPort();
-            this.buildServerPort = 8817;
+            //this.buildServerPipeName = generateRandomPipeName();
+            this.buildServerPipeName = "/tmp/example.sock";
+            this.gradleServerPort = 8827;
+            this.logger.info("gradleServerPort: ", this.gradleServerPort.toString());
+
+            //this.registerGetBuildServerPipeNameCommand();
             const cwd = this.context.asAbsolutePath("lib");
             const cmd = path.join(cwd, getGradleServerCommand());
             const env = await getGradleServerEnv();
+            const bundleDirectory = await this.getBundleDirectory();
             if (!env) {
                 await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE);
-                return;
+                //return;
             }
-            const args = [String(this.gradleServerPort), String(this.buildServerPort)];
-
-            this.logger.debug("Starting server");
+            let javaExecPath = await getRedHatJavaExecutablePath();
+            if (!javaExecPath) {
+                javaExecPath = "/Users/liujiaming/.vscode/extensions/redhat.java-1.30.0-darwin-x64/jre/17.0.10-macosx-x86_64/bin/java"
+            }
+            const args = [String(this.gradleServerPort), this.buildServerPipeName, bundleDirectory, javaExecPath];
+            for (const arg of args) {
+                this.logger.info(`arg: ${arg}`);
+            }
             this.logger.debug(`Gradle Server cmd: ${cmd} ${args.join(" ")}`);
-
             this.process = cp.spawn(`"${cmd}"`, args, {
                 cwd,
                 env,
@@ -81,6 +97,11 @@ export class GradleServer {
 
     public isReady(): boolean {
         return this.ready;
+    }
+
+    public async getBundleDirectory(): Promise<string> {
+        const extensionPath = await vscode.commands.executeCommand<string>("gradle.getExtensionPath");
+        return path.join(extensionPath, 'server');
     }
 
     public async showRestartMessage(): Promise<void> {

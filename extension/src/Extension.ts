@@ -36,6 +36,8 @@ import { instrumentOperation, sendInfo } from "vscode-extension-telemetry-wrappe
 import { GradleBuildContentProvider } from "./client/GradleBuildContentProvider";
 import { BuildServerController } from "./bs/BuildServerController";
 
+export const GET_EXTENSION_PATH = "gradle.getExtensionPath"
+
 export class Extension {
     private readonly client: GradleClient;
     private readonly server: GradleServer;
@@ -66,7 +68,6 @@ export class Extension {
     private readonly onDidTerminalOpen: vscode.Event<vscode.Terminal> = this._onDidTerminalOpen.event;
     private recentTerminal: vscode.Terminal | undefined;
     private readonly buildServerController: BuildServerController;
-
     public constructor(private readonly context: vscode.ExtensionContext) {
         const loggingChannel = vscode.window.createOutputChannel("Gradle for Java");
         logger.setLoggingChannel(loggingChannel);
@@ -82,6 +83,12 @@ export class Extension {
         }
 
         const statusBarItem = vscode.window.createStatusBarItem();
+        this.context.subscriptions.push(
+            vscode.commands.registerCommand(GET_EXTENSION_PATH, () => {
+                logger.info("ts command: Get extensionPath:" + this.context.extensionPath);
+                return this.context.extensionPath;
+            })
+        );
         this.server = new GradleServer({ host: "localhost" }, context, serverLogger);
         this.client = new GradleClient(this.server, statusBarItem, clientLogger);
         this.pinnedTasksStore = new PinnedTasksStore(context);
@@ -89,6 +96,7 @@ export class Extension {
         this.taskTerminalsStore = new TaskTerminalsStore();
         this.rootProjectsStore = new RootProjectsStore();
         this.gradleBuildContentProvider = new GradleBuildContentProvider(this.client);
+
         this.gradleTaskProvider = new GradleTaskProvider(
             this.rootProjectsStore,
             this.client,
@@ -143,7 +151,6 @@ export class Extension {
         this.buildFileWatcher = new FileWatcher("**/*.{gradle,gradle.kts}");
         this.gradleWrapperWatcher = new FileWatcher("**/gradle/wrapper/gradle-wrapper.properties");
         this.api = new Api(this.client, this.gradleTasksTreeDataProvider, this.gradleTaskProvider, this.icons);
-
         this.commands = new Commands(
             this.context,
             this.pinnedTasksStore,
@@ -156,7 +163,7 @@ export class Extension {
             this.rootProjectsStore,
             this.taskTerminalsStore,
             this.recentTasksStore,
-            this.gradleTasksTreeView
+            this.gradleTasksTreeView,
         );
 
         this.buildServerController = new BuildServerController(context);
@@ -195,7 +202,6 @@ export class Extension {
                 })
             )
         );
-
         this.client.onDidConnect(() => this.refresh());
         void this.activate();
         void startLanguageServer(this.context, this.gradleBuildContentProvider, this.rootProjectsStore);
@@ -355,4 +361,5 @@ export class Extension {
     public getApi(): Api {
         return this.api;
     }
+
 }

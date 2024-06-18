@@ -54,12 +54,15 @@ public class GradleServer {
 	}
 
 	public static void main(String[] args) throws Exception {
-		int gradleServerPort = 8887;
-		int buildServerPort = 8817;
-		if (args.length > 0) {
-			gradleServerPort = Integer.parseInt(args[0]);
-			buildServerPort = Integer.parseInt(args[1]);
+		if (args.length == 0) {
+			System.err.println("Usage: GradleServer <port>");
 		}
+		System.out.println("Starting Gradle Server");
+		System.err.println(args);
+		int gradleServerPort = Integer.parseInt(args[0]);
+		String buildServerPipeName = args[1];
+		String bundleDirectory = args[2];
+		String javaExecutablePath = args[3];
 		GradleServer server = new GradleServer(gradleServerPort);
 		Thread gradleServerThread = new Thread(() -> {
 			try {
@@ -70,7 +73,8 @@ public class GradleServer {
 			}
 		});
 
-		BuildServerThread buildServerConnectionThread = new BuildServerThread(buildServerPort);
+		BuildServerThread buildServerConnectionThread = new BuildServerThread(buildServerPipeName, bundleDirectory,
+				javaExecutablePath);
 		Thread buildServerThread = new Thread(buildServerConnectionThread);
 
 		gradleServerThread.start();

@@ -25,7 +25,7 @@ public class GradleServer {
 	@SuppressWarnings("java:S106")
 	public void start() throws IOException {
 		server.start();
-		logger.info("Server started, listening on {}", port);
+		logger.info("Gradle Server started, listening on {}", port);
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run() {
@@ -54,12 +54,29 @@ public class GradleServer {
 	}
 
 	public static void main(String[] args) throws Exception {
-		int port = 8887;
+		int gradleServerPort = 8887;
+		int buildServerPort = 8817;
 		if (args.length > 0) {
-			port = Integer.parseInt(args[0]);
+			gradleServerPort = Integer.parseInt(args[0]);
+			buildServerPort = Integer.parseInt(args[1]);
 		}
-		GradleServer server = new GradleServer(port);
-		server.start();
-		server.blockUntilShutdown();
+		GradleServer server = new GradleServer(gradleServerPort);
+		Thread gradleServerThread = new Thread(() -> {
+			try {
+				server.start();
+				server.blockUntilShutdown();
+			} catch (IOException | InterruptedException e) {
+				e.printStackTrace();
+			}
+		});
+
+		BuildServerThread buildServerConnectionThread = new BuildServerThread(buildServerPort);
+		Thread buildServerThread = new Thread(buildServerConnectionThread);
+
+		gradleServerThread.start();
+		buildServerThread.start();
+
+		gradleServerThread.join();
+		buildServerThread.join();
 	}
 }

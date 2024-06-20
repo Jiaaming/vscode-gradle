@@ -1,32 +1,33 @@
 package com.github.badsyntax.gradle;
 
-import ch.epfl.scala.bsp4j.BuildServer;
 import java.io.File;
 import java.io.IOException;
-import java.net.Socket;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import org.eclipse.lsp4j.jsonrpc.Launcher;
-
 public class BuildServerThread implements Runnable {
 
-	private static final String bundleDirectory = "/Users/liujiaming/.vscode/extensions/redhat.java-1.31.0-darwin-x64/server/../../../../Documents/24Summer/vscode-gradle/extension/server";
+	private String bundleDirectory;
 
-	private final int port;
-	public BuildServerThread(int port) {
-		this.port = port;
+	private final String pipeName;
+
+	private final String javaHome;
+	public BuildServerThread(String pipeName, String bundleDirectory, String javaHome) {
+		this.pipeName = pipeName;
+		this.bundleDirectory = bundleDirectory;
+		this.javaHome = javaHome;
 	}
+
 	@Override
 	public void run() {
 		try {
-			String javaExecutablePath = getJavaExecutablePath();
+			// String javaExecutablePath = getJavaExecutablePath();
 			String[] classpaths = getBuildServerClasspath();
 
 			String pluginPath = getBuildServerPluginPath();
 
 			List<String> command = new ArrayList<>();
-			command.add(javaExecutablePath);
+			command.add(this.javaHome);
 			if (Boolean.parseBoolean(System.getenv("DEBUG_GRADLE_BUILD_SERVER"))) {
 				command.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8989");
 			}
@@ -37,43 +38,34 @@ public class BuildServerThread implements Runnable {
 			command.add("-cp");
 			command.add(String.join(getClasspathSeparator(), classpaths));
 			command.add("com.microsoft.java.bs.core.Launcher");
+			command.add(this.pipeName);
 
 			ProcessBuilder build = new ProcessBuilder(command);
 			build.start();
 
-			try (Socket socket = new Socket("localhost", this.port)) {
-				FakeGradleBuildClient client = new FakeGradleBuildClient();
-
-				Launcher<BuildServer> launcher = Launcher.createLauncher(client, BuildServer.class,
-						socket.getInputStream(), socket.getOutputStream());
-				launcher.startListening();
-
-				// Do nothing.
-				BuildServer server = launcher.getRemoteProxy();
-				client.onConnectWithServer(server);
-			}
-
-			// BuildClient client = new FakeGradleBuildClient();
-			// Launcher<BuildServerConnection> launcher = new
-			// Launcher.Builder<BuildServerConnection>()
-			// .setOutput(process.getOutputStream()) //change to socket
-			// .setInput(process.getInputStream())
-			// .setLocalService(client)
-			// .setExecutorService(Executors.newCachedThreadPool())
-			// .setRemoteInterface(BuildServerConnection.class)
-			// .create();
-
-			// launcher.startListening();
-			// BuildServerConnection server = launcher.getRemoteProxy();
-			// client.onConnectWithServer(server);
+			System.out.println("Java: Build server started with pipe: " + this.pipeName);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-	private String getJavaExecutablePath() {
-		// Optional<String> command = ProcessHandle.current().info().command();
-		return "/Users/liujiaming/.vscode/extensions/redhat.java-1.30.0-darwin-x64/jre/17.0.10-macosx-x86_64/bin/java";
+	private static String getJavaExecutablePath() {
+		String javaHome = System.getenv("JAVA_HOME");
+		if (javaHome == null) {
+			throw new IllegalStateException("JAVA_HOME environment variable is not set.");
+		}
+
+		File javaBin = new File(javaHome, "bin");
+		File javaExec = new File(javaBin, isWindows() ? "java.exe" : "java");
+		if (!javaExec.exists()) {
+			throw new IllegalStateException("Java executable not found at: " + javaExec.getAbsolutePath());
+		}
+
+		return javaExec.getAbsolutePath();
+	}
+
+	private static boolean isWindows() {
+		return System.getProperty("os.name").toLowerCase().contains("win");
 	}
 
 	private String[] getBuildServerClasspath() {
@@ -91,7 +83,6 @@ public class BuildServerThread implements Runnable {
 		if (os.contains("win")) {
 			return ";";
 		}
-
 		return ":"; // Linux or Mac
 	}
 }

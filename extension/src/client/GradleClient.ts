@@ -42,11 +42,6 @@ import {
     // LoggerStream,
     // LogVerbosity,
     Logger } from "../logger";
-import {
-    logger,
-    // LoggerStream,
-    // LogVerbosity,
-    Logger } from "../logger";
 import { GradleServer } from "../server";
 import { ProgressHandler } from "../progress";
 import { removeCancellingTask, restartQueuedTask } from "../tasks/taskUtil";
@@ -71,7 +66,6 @@ export class GradleClient implements vscode.Disposable {
     private readonly connectDeadline = 30; // seconds
     private grpcClient: GrpcClient | null = null;
     private rpcConnection: rpc.MessageConnection | null = null;
-    private rpcConnection: rpc.MessageConnection | null = null;
     private readonly _onDidConnect: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     private readonly _onDidConnectFail: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     public readonly onDidConnect: vscode.Event<null> = this._onDidConnect.event;
@@ -92,30 +86,6 @@ export class GradleClient implements vscode.Disposable {
 
     private handleServerStop = (): void => {
         this.close();
-    };
-
-    public handleRpcServerStart = (): Thenable<void> => {
-        return vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Window,
-                title: "Gradle",
-                cancellable: false,
-            },
-            (progress: vscode.Progress<{ message?: string }>) => {
-                progress.report({ message: "Connecting" });
-                return new Promise((resolve) => {
-                    const disposableConnectHandler = this.onDidConnect(() => {
-                        disposableConnectHandler.dispose();
-                        resolve();
-                    });
-                    const disposableConnectFailHandler = this.onDidConnectFail(() => {
-                        disposableConnectFailHandler.dispose();
-                        resolve();
-                    });
-                    this.connectToRpcServer();
-                });
-            }
-        );
     };
 
     public handleRpcServerStart = (): Thenable<void> => {
@@ -363,13 +333,6 @@ export class GradleClient implements vscode.Disposable {
                 console.log("progressHandler", progressHandler);
                 console.log("progressHandler", progressHandler);
                 token.onCancellationRequested(() => this.cancelBuild(cancellationKey));
-
-                const request = {
-                    projectDir: rootProject.getProjectUri().fsPath,
-                    cancellationKey: cancellationKey,
-                    gradleConfig: gradleConfig,
-                    showOutputColors: showOutputColors
-                };
 
                 const request = {
                     projectDir: rootProject.getProjectUri().fsPath,

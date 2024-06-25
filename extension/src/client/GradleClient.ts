@@ -10,6 +10,8 @@ import {
     Output,
     // GetBuildReply,
     // GetBuildRequest,
+    // GetBuildReply,
+    // GetBuildRequest,
     Cancelled,
     GradleBuild,
     // Environment,
@@ -32,7 +34,14 @@ import {
 
 //import { GetBuildParams } from "../bsp/GetBuildParams";
 //import { GetBuildResult } from "../bsp/GetBuildResult";
+//import { GetBuildParams } from "../bsp/GetBuildParams";
+//import { GetBuildResult } from "../bsp/GetBuildResult";
 import { GradleClient as GrpcClient } from "../proto/gradle_grpc_pb";
+import {
+    logger,
+    // LoggerStream,
+    // LogVerbosity,
+    Logger } from "../logger";
 import {
     logger,
     // LoggerStream,
@@ -62,6 +71,7 @@ export class GradleClient implements vscode.Disposable {
     private readonly connectDeadline = 30; // seconds
     private grpcClient: GrpcClient | null = null;
     private rpcConnection: rpc.MessageConnection | null = null;
+    private rpcConnection: rpc.MessageConnection | null = null;
     private readonly _onDidConnect: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     private readonly _onDidConnectFail: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     public readonly onDidConnect: vscode.Event<null> = this._onDidConnect.event;
@@ -75,11 +85,37 @@ export class GradleClient implements vscode.Disposable {
     ) {
         //this.server.onDidStart(this.handleServerStart);
         this.server.onDidStart(this.handleRpcServerStart);
+        //this.server.onDidStart(this.handleServerStart);
+        this.server.onDidStart(this.handleRpcServerStart);
         this.server.onDidStop(this.handleServerStop);
     }
 
     private handleServerStop = (): void => {
         this.close();
+    };
+
+    public handleRpcServerStart = (): Thenable<void> => {
+        return vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Window,
+                title: "Gradle",
+                cancellable: false,
+            },
+            (progress: vscode.Progress<{ message?: string }>) => {
+                progress.report({ message: "Connecting" });
+                return new Promise((resolve) => {
+                    const disposableConnectHandler = this.onDidConnect(() => {
+                        disposableConnectHandler.dispose();
+                        resolve();
+                    });
+                    const disposableConnectFailHandler = this.onDidConnectFail(() => {
+                        disposableConnectFailHandler.dispose();
+                        resolve();
+                    });
+                    this.connectToRpcServer();
+                });
+            }
+        );
     };
 
     public handleRpcServerStart = (): Thenable<void> => {
@@ -325,7 +361,15 @@ export class GradleClient implements vscode.Disposable {
                 const progressHandler = new ProgressHandler(progress, "Configure project");
                 const cancellationKey = getBuildCancellationKey(rootProject.getProjectUri().fsPath);
                 console.log("progressHandler", progressHandler);
+                console.log("progressHandler", progressHandler);
                 token.onCancellationRequested(() => this.cancelBuild(cancellationKey));
+
+                const request = {
+                    projectDir: rootProject.getProjectUri().fsPath,
+                    cancellationKey: cancellationKey,
+                    gradleConfig: gradleConfig,
+                    showOutputColors: showOutputColors
+                };
 
                 const request = {
                     projectDir: rootProject.getProjectUri().fsPath,
@@ -354,9 +398,11 @@ export class GradleClient implements vscode.Disposable {
                     });
                 } catch (err) {
                     logger.error(`Error getting build for ${rootProject.getProjectUri().fsPath}: ${err.message}`);
+                    logger.error(`Error getting build for ${rootProject.getProjectUri().fsPath}: ${err.message}`);
                     this.statusBarItem.command = COMMAND_SHOW_LOGS;
                     this.statusBarItem.text = "$(warning) Gradle: Build Error";
                     this.statusBarItem.show();
+                    throw err;
                     throw err;
                 } finally {
                     process.nextTick(() => vscode.commands.executeCommand(COMMAND_REFRESH_DAEMON_STATUS));
@@ -612,6 +658,9 @@ export class GradleClient implements vscode.Disposable {
         }
     };
 
+    // private handleGetBuildCancelled = (cancelled: Cancelled): void => {
+    //     logger.info("Build cancelled:", cancelled.getMessage());
+    // };
     // private handleGetBuildCancelled = (cancelled: Cancelled): void => {
     //     logger.info("Build cancelled:", cancelled.getMessage());
     // };

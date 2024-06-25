@@ -1,8 +1,11 @@
 import * as vscode from "vscode";
 import * as grpc from "@grpc/grpc-js";
-import { connectivityState as ConnectivityState } from "@grpc/grpc-js";
+//import { connectivityState as ConnectivityState } from "@grpc/grpc-js";
 import * as rpc from 'vscode-jsonrpc/node';
 import * as cp from "child_process";
+import * as net from 'net'
+import * as fs from 'fs';
+
 import {
     Output,
     // GetBuildReply,
@@ -10,7 +13,7 @@ import {
     Cancelled,
     GradleBuild,
     // Environment,
-    GradleConfig,
+    //GradleConfig,
     GetDaemonsStatusReply,
     GetDaemonsStatusRequest,
     StopDaemonsReply,
@@ -42,10 +45,10 @@ import { COMMAND_REFRESH_DAEMON_STATUS, COMMAND_SHOW_LOGS, COMMAND_CANCEL_BUILD 
 import { RootProject } from "../rootProject/RootProject";
 import { getBuildCancellationKey } from "./CancellationKeys";
 import { EventWaiter } from "../util/EventWaiter";
-import { getGradleConfig, getJavaDebugCleanOutput } from "../util/config";
+import { getJavaDebugCleanOutput } from "../util/config";
 //import { setDefault, unsetDefault } from "../views/defaultProject/DefaultProjectUtils";
 import { SpecifySourcePackageNameStep } from "../createProject/SpecifySourcePackageNameStep";
-
+import { GradleConfig } from "../bsp/GradleConfig";
 // function logBuildEnvironment(environment: Environment): void {
 //     const javaEnv = environment.getJavaEnvironment()!;
 //     const gradleEnv = environment.getGradleEnvironment()!;
@@ -63,7 +66,6 @@ export class GradleClient implements vscode.Disposable {
     private readonly _onDidConnectFail: vscode.EventEmitter<null> = new vscode.EventEmitter<null>();
     public readonly onDidConnect: vscode.Event<null> = this._onDidConnect.event;
     public readonly onDidConnectFail: vscode.Event<null> = this._onDidConnectFail.event;
-
     private readonly waitForConnect = new EventWaiter(this.onDidConnect).wait;
 
     public constructor(
@@ -155,13 +157,49 @@ export class GradleClient implements vscode.Disposable {
 
     private connectToRpcServer(): void {
         try {
-            let childProcess = cp.spawn("...");
+            const javaExecutablePath = "/Users/liujiaming/.vscode/extensions/redhat.java-1.30.0-darwin-x64/jre/17.0.10-macosx-x86_64/bin/java";
+            const classpath = "/Users/liujiaming/.vscode/extensions/redhat.java-1.30.0-darwin-x64/server/../../../../Documents/24Summer/vscode-gradle/extension/server/server.jar:/Users/liujiaming/.vscode/extensions/redhat.java-1.30.0-darwin-x64/server/../../../../Documents/24Summer/vscode-gradle/extension/server/runtime/*";
+            const pluginDir = "/Users/liujiaming/.vscode/extensions/redhat.java-1.30.0-darwin-x64/server/../../../../Documents/24Summer/vscode-gradle/extension/server/plugins";
+            const PIPE_PATH = "/tmp/example.sock";
+            let args: string[] = [];
+            if (process.env.DEBUG_MERGE) {
+                args.push("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8189");
+            }
+            args.push('--add-opens=java.base/java.lang=ALL-UNNAMED');
+            args.push('--add-opens=java.base/java.io=ALL-UNNAMED');
+            args.push('--add-opens=java.base/java.util=ALL-UNNAMED');
+            args.push(`-Dplugin.dir=${pluginDir}`);
+            args.push('-cp', classpath);
+            args.push('com.microsoft.java.bs.core.Launcher');
+            logger.info(`Gradle Client: Starting Gradle Build Server with command: ${javaExecutablePath} ${args.join(' ')}`);
+            args.push(PIPE_PATH);
+            const childProcess = cp.spawn(javaExecutablePath, args, { stdio: 'pipe' });
 
-            let connection = rpc.createMessageConnection(
-                new rpc.StreamMessageReader(childProcess.stdout),
-                new rpc.StreamMessageWriter(childProcess.stdin));
+            childProcess.stdout.on('data', (data) => {
+                logger.info(`Server stdout: ${data}`);
+            });
 
-            connection.listen();
+            childProcess.stderr.on('data', (data) => {
+                logger.error(`Server stderr: ${data}`);
+            });
+
+            childProcess.on('exit', (code) => {
+                logger.info(`Server exited with code ${code}`);
+            });
+
+            if (fs.existsSync(PIPE_PATH)) {
+                fs.unlinkSync(PIPE_PATH);
+            }
+            const server = net.createServer((socket: net.Socket) => {
+                this.rpcConnection = rpc.createMessageConnection(
+                    new rpc.StreamMessageReader(socket),
+                    new rpc.StreamMessageWriter(socket)
+                )
+                this.rpcConnection.listen()
+            })
+            server.listen(PIPE_PATH)
+            logger.info("Gradle client connected to server");
+            this._onDidConnect.fire(null)
         } catch (err) {
             logger.error("Unable to construct the JSON-RPC client:", err.message);
             this.statusBarItem.hide();
@@ -298,9 +336,16 @@ export class GradleClient implements vscode.Disposable {
 
                 try {
                     return await new Promise<GradleBuild | undefined>((resolve, reject) => {
+                        if (!this.rpcConnection) {
+                            logger.error("RPC connection is not initialized");
+                            throw new Error("RPC connection is not initialized");
+                        }
+                        logger.info("Sending request to get build");
+
                         this.rpcConnection?.sendRequest<GradleBuild>('task/getBuild', request).then(response => {
-                            const res = resolve(response);
-                            console.log("res", res);
+                            logger.info("start build");
+
+                            resolve(response);
                             logger.info("Completed build");
                         }).catch(error => {
                             logger.error("Error getting build:", error.message);
@@ -350,12 +395,12 @@ export class GradleClient implements vscode.Disposable {
                     await vscode.commands.executeCommand(COMMAND_REFRESH_DAEMON_STATUS);
                 });
 
-                const gradleConfig = getGradleConfig();
+                //const gradleConfig = getGradleConfig();
                 const request = new RunBuildRequest();
                 request.setProjectDir(projectFolder);
                 request.setCancellationKey(cancellationKey);
                 request.setArgsList(args as string[]);
-                request.setGradleConfig(gradleConfig);
+                //request.setGradleConfig(gradleConfig);
                 request.setShowOutputColors(showOutputColors);
                 request.setJavaDebugPort(javaDebugPort);
                 request.setInput(input);
@@ -576,9 +621,9 @@ export class GradleClient implements vscode.Disposable {
         this.close();
         this._onDidConnectFail.fire(null);
         if (this.server.isReady()) {
-            const connectivityState = this.grpcClient!.getChannel().getConnectivityState(true);
-            const enumKey = ConnectivityState[connectivityState];
-            logger.error("The client has state:", enumKey);
+            //const connectivityState = this.grpcClient!.getChannel().getConnectivityState(true);
+            //const enumKey = ConnectivityState[connectivityState];
+            logger.error("The client has state:", "UNKNOWN");
             await this.showRestartMessage();
         } else {
             await this.server.showRestartMessage();
@@ -598,7 +643,7 @@ export class GradleClient implements vscode.Disposable {
 
     public close(): void {
         this.statusBarItem.hide();
-        this.grpcClient?.close();
+        //this.grpcClient?.close();
     }
 
     public dispose(): void {

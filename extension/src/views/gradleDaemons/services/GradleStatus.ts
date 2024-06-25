@@ -1,7 +1,7 @@
 import { DaemonInfo } from "../models/DaemonInfo";
 import { DaemonStatus } from "../models/DaemonStatus";
 import { getGradleConfig } from "../../../util/config";
-import { GradleConfig } from "../../../proto/gradle_pb";
+import { GradleConfig } from "../../../bsp/GradleConfig";
 import { GradleWrapper } from "./GradleWrapper";
 import { GradleLocalInstallation } from "./GradleLocalInstallation";
 import { GradleConnectionType } from "../models/GradleConnectionType";

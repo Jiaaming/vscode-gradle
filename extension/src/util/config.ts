@@ -1,7 +1,7 @@
 import { execSync } from "child_process";
 import { getRuntime } from "jdk-utils";
 import * as vscode from "vscode";
-import { GradleConfig } from "../proto/gradle_pb";
+import { GradleConfig } from "../bsp/GradleConfig";
 import { RootProject } from "../rootProject/RootProject";
 
 type AutoDetect = "on" | "off";

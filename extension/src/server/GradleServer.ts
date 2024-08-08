@@ -8,7 +8,7 @@ import { sendInfo } from "vscode-extension-telemetry-wrapper";
 import { getGradleServerCommand, getGradleServerEnv, quoteArg } from "./serverUtil";
 import { Logger } from "../logger/index";
 import { NO_JAVA_EXECUTABLE, OPT_RESTART, INSTALL_JDK } from "../constant";
-import { redHatJavaInstalled, javaExtensionPackInstalled } from "../util/config";
+import { extensionInstalled } from "../util/config";
 import { BspProxy } from "../bs/BspProxy";
 import { getRandomPipeName } from "../util/generateRandomPipeName";
 const SERVER_LOGLEVEL_REGEX = /^\[([A-Z]+)\](.*)$/;
@@ -51,7 +51,7 @@ export class GradleServer {
     }
     public async start(): Promise<void> {
         let startBuildServer = false;
-        if (redHatJavaInstalled()) {
+        if (extensionInstalled("redhat.java")) {
             const isPrepared = this.bspProxy.prepareToStart();
             if (isPrepared) {
                 startBuildServer = true;
@@ -69,14 +69,12 @@ export class GradleServer {
             sendInfo("", {
                 kind: "GradleServerEnvMissing",
             });
-            if (javaExtensionPackInstalled()) {
-                const selection = await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE, INSTALL_JDK);
+            const choice = extensionInstalled("vscjava.vscode-java-pack") ? [INSTALL_JDK] : [];
+            vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE, ...choice).then((selection) => {
                 if (selection === INSTALL_JDK) {
-                    await vscode.commands.executeCommand("java.installJdk");
+                    vscode.commands.executeCommand("java.installJdk");
                 }
-            } else {
-                await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE);
-            }
+            });
             return;
         }
         const args = [

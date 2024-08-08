@@ -73,9 +73,8 @@ export class GradleServer {
             const selection = await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE, INSTALL_JDK);
             if (selection === INSTALL_JDK) {
                 await vscode.commands.executeCommand("java.installJdk");
-            } else {
-                return;
             }
+            return;
         }
         const args = [
             quoteArg(`--port=${this.taskServerPort}`),

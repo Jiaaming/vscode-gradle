@@ -7,7 +7,7 @@ import { commands } from "vscode";
 import { sendInfo } from "vscode-extension-telemetry-wrapper";
 import { getGradleServerCommand, getGradleServerEnv, quoteArg } from "./serverUtil";
 import { Logger } from "../logger/index";
-import { NO_JAVA_EXECUTABLE, OPT_RESTART } from "../constant";
+import { NO_JAVA_EXECUTABLE, OPT_RESTART, INSTALL_JDK } from "../constant";
 import { redHatJavaInstalled } from "../util/config";
 import { BspProxy } from "../bs/BspProxy";
 import { getRandomPipeName } from "../util/generateRandomPipeName";
@@ -70,8 +70,12 @@ export class GradleServer {
             sendInfo("", {
                 kind: "GradleServerEnvMissing",
             });
-            await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE);
-            return;
+            const selection = await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE, INSTALL_JDK);
+            if (selection === INSTALL_JDK) {
+                await vscode.commands.executeCommand("java.installJdk");
+            } else {
+                return;
+            }
         }
         const args = [
             quoteArg(`--port=${this.taskServerPort}`),

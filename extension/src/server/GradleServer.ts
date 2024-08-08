@@ -8,7 +8,7 @@ import { sendInfo } from "vscode-extension-telemetry-wrapper";
 import { getGradleServerCommand, getGradleServerEnv, quoteArg } from "./serverUtil";
 import { Logger } from "../logger/index";
 import { NO_JAVA_EXECUTABLE, OPT_RESTART, INSTALL_JDK } from "../constant";
-import { redHatJavaInstalled } from "../util/config";
+import { redHatJavaInstalled, javaExtensionPackInstalled } from "../util/config";
 import { BspProxy } from "../bs/BspProxy";
 import { getRandomPipeName } from "../util/generateRandomPipeName";
 const SERVER_LOGLEVEL_REGEX = /^\[([A-Z]+)\](.*)$/;
@@ -65,14 +65,17 @@ export class GradleServer {
         const cwd = this.context.asAbsolutePath("lib");
         const cmd = path.join(cwd, getGradleServerCommand());
         const env = await getGradleServerEnv();
-        const bundleDirectory = this.context.asAbsolutePath("server");
         if (!env) {
             sendInfo("", {
                 kind: "GradleServerEnvMissing",
             });
-            const selection = await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE, INSTALL_JDK);
-            if (selection === INSTALL_JDK) {
-                await vscode.commands.executeCommand("java.installJdk");
+            if (javaExtensionPackInstalled()) {
+                const selection = await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE, INSTALL_JDK);
+                if (selection === INSTALL_JDK) {
+                    await vscode.commands.executeCommand("java.installJdk");
+                }
+            } else {
+                await vscode.window.showErrorMessage(NO_JAVA_EXECUTABLE);
             }
             return;
         }
@@ -83,6 +86,7 @@ export class GradleServer {
         ];
         if (startBuildServer) {
             const buildServerPipeName = this.bspProxy.getBuildServerPipeName();
+            const bundleDirectory = this.context.asAbsolutePath("server");
             args.push(quoteArg(`--pipeName=${buildServerPipeName}`));
             args.push(quoteArg(`--bundleDir=${bundleDirectory}`));
         }

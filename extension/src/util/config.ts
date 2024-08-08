@@ -69,6 +69,9 @@ export function redHatJavaInstalled(): boolean {
     return !!vscode.extensions.getExtension("redhat.java");
 }
 
+export function javaExtensionPackInstalled(): boolean {
+    return !!vscode.extensions.getExtension("vscjava.vscode-java-pack");
+}
 export function getRedHatJavaEmbeddedJRE(): string | undefined {
     if (!redHatJavaInstalled()) {
         return undefined;
